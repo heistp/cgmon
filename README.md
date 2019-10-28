@@ -38,25 +38,30 @@ Install instructions:
 
 1. [Install Go](https://golang.org/dl/).
 2. Download cgmon: `go get -u github.com/heistp/cgmon`
-3. Build cgmon: `go build` (in `cgmon` directory, by default
+3. Build cgmon: `go build` (from `cgmon` directory, by default
    `~/go/src/github.com/heistp/cgmon`)
 4. Put `cgmon` somewhere on your PATH (or specify an absolute path)
 5. Run `cgmon -h` for usage
 
-Note that this was developed on Go 1.13, but also tested on Go 1.12. It may or
-may not build and work with earlier versions.  The C code doesn't depend on any
-external libs, and the Go code depends only on [gonum](https://github.com/gonum)
-for statistics, which should be pulled down automatically by `go get`.
+A few more (hopefully unnecessary) notes:
 
-Note also that because `cgmon` uses `cgo`, it is recommended to run the
-executable on the same version of Linux it was built on. However, there is some
-flexibility here. For example, it's possible to build on kernel 5.1 and deploy
-on kernel 4.15, and vice-versa. I had to make a few small changes in order for
-this to be possible.
-
-The C code doesn't depend on any external libs, and the Go code depends only on
-[gonum](https://github.com/gonum) for statistics, which should be pulled down
-automatically by `go get`.
+- The C code doesn't depend on any external libs, and the Go code only depends
+  on [gonum](https://github.com/gonum) for statistics, which should be pulled
+  down automatically by `go get`. `go build` compiles the C code automatically
+  (obviously, a C compiler must be installed).
+- `cgmon` was developed on Go version 1.13, but also tested on Go 1.12.  It may
+  or may not build and work with earlier versions.  The C code doesn't depend on
+  any external libs, and the Go code depends only on
+  [gonum](https://github.com/gonum) for statistics, which should be pulled down
+  automatically by `go get`.
+- It is also possible instead of step 3 to do `go install
+  github.com/heistp/cgmon`, which will place the binary in `~/go/bin` by
+  default. The method I included just offers more control over where the binary goes.
+- Because `cgmon` uses `cgo`, it is recommended to run the executable on the
+  same version of Linux it was built on. However, there is some flexibility
+  here. For example, it's possible to build on kernel 5.1 and deploy on kernel
+  4.15, and vice-versa. I had to make a few small changes on the C side in order
+  for this to be possible.
 
 ## Quick Start
 
