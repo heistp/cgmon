@@ -1,0 +1,28 @@
+# Profiles
+cgmon.pprof
+
+# Executables
+/cgmon
+
+# Internal tools for now
+/cmd
+
+# Private directory
+private
+
+# JSON output files
+*.json
+*.json.gz
+
+# VIM
+*.swp
+.tags
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
