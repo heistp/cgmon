@@ -5,6 +5,14 @@ statistics from the Linux kernel.
 
 Feel free to report any problems or feature requests as issues.
 
+1. [Features](#features)
+2. [Installation](#installation)
+3. [Quick Start](#quick-start)
+4. [Sample Results and Discussion](#sample-results-and-discussion)
+5. [Understanding the cgmon Pipeline](#understanding-the-cgmon-pipeline)
+6. [Metrics](#metrics)
+7. [Todo](#todo)
+
 ## Features
 
 - records:

@@ -14,23 +14,22 @@ import (
 	"github.com/heistp/cgmon/writer"
 )
 
-// Tasks:
-// - Post
-
 // Notes/Questions:
+// - The correlation between retransmits and cwnd always appears to be around 0,
+//   leading me to believe this it isn't done the right way or what we want.
+// - Ok calculation for snd_cwnd_bytes?
+// - Flows end with first sample where they're missing, ok?
+// - Ok handling of idle flows with time gaps as weights?
+// - There may not be enough data on shorter flows to calculate statistically
+//   significant correlations, so we may need to use -tracker-min-samples
 // - Should I rename Src/Dst to Local/Remote? Src/Dst used in tcphdr. Can
 //   I tell if it's a client or server socket from tcphdr or tcp_info?
 // - First quantile input data weight is median of others, ok?
 // - Timestamp taken right after netlink receive, ok?
-// - Ok calculation for snd_cwnd_bytes?
-// - Flows end with first sample where they're missing, ok?
-// - Ok handling of idle flows with time gaps as weights?
 // - Added counters for Delivered and DeliveredCE (ECE marked packets), but
 //   no correlations yet
 // - Max pacing rate from the kernel appears to always have a value of
 //   147573952589676.4, so I pulled it out for now
-// - There may not be enough data on shorter flows to calculate statistically
-//   significant correlations, so we may need to use -tracker-min-samples
 
 type Config struct {
 	Netlink     netlink.Config  // netlink config
