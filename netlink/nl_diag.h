@@ -30,10 +30,10 @@ struct nl_sample {
 	uint32_t min_rtt_us;          // min TCP round-trip time in usec
 	uint32_t snd_cwnd_bytes;      // TCP send cwnd in bytes
 	uint64_t pacing_rate_Bps;     // TCP pacing rate in bytes/sec
-	//uint64_t max_pacing_rate_Bps; // max TCP pacing rate in bytes/sec
 	uint32_t total_retrans;       // TCP total retransmits
-	uint32_t delivered;           // TCP delivered packets
-	uint32_t delivered_ce;        // TCP CE on delivered packets (ECE received)
+	// delivery stats only available in 4.18 and later
+	//uint32_t delivered;           // TCP delivered packets
+	//uint32_t delivered_ce;        // TCP CE on delivered packets (ECE received)
 	uint64_t bytes_acked;         // TCP bytes acked
 };
 

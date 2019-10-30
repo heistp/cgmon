@@ -45,10 +45,10 @@ func (r *Result) Samples() (ss []sampler.Sample) {
 				uint32(s.min_rtt_us),
 				uint32(s.snd_cwnd_bytes),
 				uint64(s.pacing_rate_Bps),
-				//uint64(s.max_pacing_rate_Bps),
 				uint32(s.total_retrans),
-				uint32(s.delivered),
-				uint32(s.delivered_ce),
+				// delivery stats only available in 4.18 and later
+				//uint32(s.delivered),
+				//uint32(s.delivered_ce),
 				uint64(s.bytes_acked),
 			},
 		}

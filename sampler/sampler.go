@@ -15,17 +15,17 @@ type ID struct {
 
 // A Data contains the sampled values for a flow.
 type Data struct {
-	TstampNs      uint64 // monotonic nsec receive timestamp
-	Options       uint8  // TCP options (TCPI_OPT_* in linux/tcp.h)
-	RTTus         uint32 // TCP RTT in microseconds
-	MinRTTus      uint32 // min TCP RTT in microseconds
-	SndCwndBytes  uint32 // TCP cwnd in bytes
-	PacingRateBps uint64 // TCP pacing rate in bytes / second
-	//MaxPacingRateBps uint64 // max TCP pacing rate in bytes / second
+	TstampNs         uint64 // monotonic nsec receive timestamp
+	Options          uint8  // TCP options (TCPI_OPT_* in linux/tcp.h)
+	RTTus            uint32 // TCP RTT in microseconds
+	MinRTTus         uint32 // min TCP RTT in microseconds
+	SndCwndBytes     uint32 // TCP cwnd in bytes
+	PacingRateBps    uint64 // TCP pacing rate in bytes / second
 	TotalRetransmits uint32 // total retransmit counter
-	Delivered        uint32 // total delivered packets
-	DeliveredCE      uint32 // total delivered packets acked with ECE
-	BytesAcked       uint64 // bytes acked
+	// delivery stats only available in 4.18 and later
+	//Delivered        uint32 // total delivered packets
+	//DeliveredCE      uint32 // total delivered packets acked with ECE
+	BytesAcked uint64 // bytes acked
 }
 
 // EquivalentTo returns true if all fields excluding the timestamp are the same

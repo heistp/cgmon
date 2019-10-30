@@ -228,10 +228,9 @@ void parse(struct inet_diag_msg *msg, int rtalen, uint64_t tstamp_ns,
 				tcpi->tcpi_min_rtt,
 				tcpi->tcpi_snd_cwnd * tcpi->tcpi_snd_mss,
 				tcpi->tcpi_pacing_rate,
-				//tcpi->tcpi_max_pacing_rate,
 				tcpi->tcpi_total_retrans,
-				tcpi->tcpi_delivered,
-				tcpi->tcpi_delivered_ce,
+				//tcpi->tcpi_delivered,
+				//tcpi->tcpi_delivered_ce,
 				tcpi->tcpi_bytes_acked,
 			};
 			// len for IPv6: msg->idiag_family == AF_INET ? 4 : 16

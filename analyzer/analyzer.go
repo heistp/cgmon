@@ -57,9 +57,10 @@ type FlowStats struct {
 	CorrPacingCwnd            float64       // correlation between pacing rate and cwnd
 	TotalRetransmits          uint32        // the value of tcpi_total_retrans from the kernel on the last sample
 	BytesAcked                uint64        // bytes acked
-	Delivered                 uint32        // packets delivered
-	DeliveredCE               uint32        // packets delivered and acked with ECE
-	SendThroughputMbps        float64       // mean send throughput in Mbps
+	// delivery stats only available in 4.18 and later
+	//Delivered                 uint32        // packets delivered
+	//DeliveredCE               uint32        // packets delivered and acked with ECE
+	SendThroughputMbps float64 // mean send throughput in Mbps
 }
 
 type Config struct {
@@ -177,8 +178,8 @@ func (f *flow) analyze() (s *FlowStats) {
 	}
 	s.TotalRetransmits = f.lastData().TotalRetransmits
 	s.BytesAcked = f.lastData().BytesAcked
-	s.Delivered = f.lastData().Delivered
-	s.DeliveredCE = f.lastData().DeliveredCE
+	//s.Delivered = f.lastData().Delivered
+	//s.DeliveredCE = f.lastData().DeliveredCE
 	s.SendThroughputMbps = bytesPSToMbps(1000000000 * s.BytesAcked /
 		uint64(s.EndTime.Sub(s.StartTime)))
 	return
