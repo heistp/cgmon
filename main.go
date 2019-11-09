@@ -274,7 +274,7 @@ func run(cfg *Config) {
 			done <- true
 		}()
 		printMetrics := func() {
-			log.Printf("reading metrics\n" + a.metrics.String())
+			log.Printf("reading metrics\n" + a.DumpMetrics())
 		}
 		for {
 			sig := <-sigs

@@ -1,20 +1,21 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"runtime"
 	"text/template"
 
-	"github.com/heistp/cgmon/metrics"
+	"github.com/heistp/cgmon/analyzer"
 )
 
 type rootHandler struct {
-	tmpl    *template.Template
-	metrics *metrics.Metrics
+	tmpl *template.Template
+	app  *App
 }
 
-func newRootHandler(m *metrics.Metrics) *rootHandler {
+func newRootHandler(a *App) *rootHandler {
 	thtml := `
 <html>
 <head>
@@ -26,7 +27,9 @@ func newRootHandler(m *metrics.Metrics) *rootHandler {
 {{.Metrics}}
 </pre>
 
-<div>
+<a href="/flow-duration-histogram">Show Flow Duration Histogram</a>
+
+<div style="margin-top: 1em">
 <form action="/" method="GET" style="float: left; margin-right: 1em">
     <input type="submit" value="Refresh" />
 </form>
@@ -40,7 +43,7 @@ func newRootHandler(m *metrics.Metrics) *rootHandler {
 
 	tmpl := template.Must(template.New("thtml").Parse(thtml))
 
-	return &rootHandler{tmpl, m}
+	return &rootHandler{tmpl, a}
 }
 
 func (h *rootHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -50,12 +53,23 @@ func (h *rootHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	d := httpServerData{
 		VERSION,
-		h.metrics.String(),
+		h.app.DumpMetrics(),
 	}
 
 	if err := h.tmpl.Execute(w, d); err != nil {
 		log.Printf("http server error executing template (%s)", err)
 	}
+}
+
+type flowDurationHistogramHandler struct {
+	analyzer *analyzer.Analyzer
+}
+
+func (h *flowDurationHistogramHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	flh, oorp := h.analyzer.FlowDurations.String(80)
+	fmt.Fprintf(w, "Flow duration histogram (%.1f%% out of range):\n", oorp)
+	fmt.Fprintf(w, flh)
+	fmt.Fprintf(w, "\n")
 }
 
 type httpServerData struct {

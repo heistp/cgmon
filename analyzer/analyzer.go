@@ -5,6 +5,7 @@ import (
 	"math"
 	"net"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/heistp/cgmon/linux"
@@ -51,7 +52,8 @@ type FlowStats struct {
 	MinRTTObservedms          float64       // minimum RTT in the observed samples
 	MaxPacingRateKernelMbps   float64       // maximum pacing rate as tracked by the kernel, in Mbps
 	MaxPacingRateObservedMbps float64       // maximum pacing rate in the observed samples
-	RTTSevenNumSum            [7]float64    // RTT seven number summary
+	RTTSummary                [7]float64    // RTT seven number summary
+	RTTVarSummary             [7]float64    // RTT variance seven number summary
 	CorrRTTCwnd               float64       // correlation between RTT and cwnd
 	CorrRetransCwnd           float64       // correlation between retransmit rate and cwnd
 	CorrPacingCwnd            float64       // correlation between pacing rate and cwnd
@@ -73,13 +75,56 @@ type Config struct {
 	Log                    bool              // if true, logging is enabled
 }
 
-type Analyzer struct {
-	Config
-	metrics *metrics.Metrics
+type Metrics struct {
+	AnalyzeTimes metrics.DurationStats
+	sync.RWMutex
 }
 
-func NewAnalyzer(cfg Config, m *metrics.Metrics) *Analyzer {
-	return &Analyzer{cfg, m}
+func (m *Metrics) recordAnalyzeTime(d time.Duration) {
+	m.Lock()
+	defer m.Unlock()
+	m.AnalyzeTimes.Push(d)
+}
+
+type Analyzer struct {
+	Config
+	FlowDurations metrics.DurationHistogram
+	metrics       Metrics
+}
+
+func mindur(d1, d2 time.Duration) time.Duration {
+	if d1 < d2 {
+		return d1
+	}
+	return d2
+}
+
+func maxdur(d1, d2 time.Duration) time.Duration {
+	if d1 > d2 {
+		return d1
+	}
+	return d2
+}
+
+func NewAnalyzer(cfg Config) *Analyzer {
+	steps := []time.Duration{
+		mindur(cfg.SamplerInterval, 2*time.Second),
+		maxdur(mindur(cfg.SamplerInterval, 5*time.Second), 100*time.Millisecond),
+		maxdur(mindur(cfg.SamplerInterval, 60*time.Second), 1*time.Second),
+		maxdur(mindur(cfg.SamplerInterval, 1*time.Hour), 1*time.Minute),
+	}
+	ends := []time.Duration{
+		2 * time.Second,
+		5 * time.Second,
+		60 * time.Second,
+		1 * time.Hour,
+	}
+
+	return &Analyzer{
+		cfg,
+		metrics.NewDurationHistogram(steps, ends),
+		Metrics{},
+	}
 }
 
 func (a *Analyzer) Analyze(fs []*tracker.Flow) (s []*FlowStats) {
@@ -95,15 +140,24 @@ func (a *Analyzer) Analyze(fs []*tracker.Flow) (s []*FlowStats) {
 	for i := 0; i < len(fs); i++ {
 		fa.Flow = fs[i]
 		s[i] = fa.analyze()
+		a.FlowDurations.Push(a.SamplerInterval *
+			time.Duration(s[i].Samples+s[i].SamplesDeduped))
 	}
 
 	el := time.Since(t0)
-	a.metrics.PushAnalyzer(el)
+	a.metrics.recordAnalyzeTime(el)
 
 	if a.Log {
 		log.Printf("analyzer time=%s flows=%d", el, len(fs))
 	}
 
+	return
+}
+
+func (a *Analyzer) Metrics() (m Metrics) {
+	a.metrics.RLock()
+	defer a.metrics.RUnlock()
+	m = a.metrics
 	return
 }
 
@@ -127,10 +181,10 @@ func (f *flow) analyze() (s *FlowStats) {
 	s.ECNSeen = f.optSeen(linux.TCPI_OPT_ECN_SEEN)
 	s.MinRTTKernelms = usToMs(f.minRTTKernel())
 	s.MinRTTObservedms = usToMs(f.minRTTObserved())
-	//s.MaxPacingRateKernelMbps = bytesPSToMbps(f.maxPacingRateKernel())
 	s.MaxPacingRateObservedMbps = bytesPSToMbps(f.maxPacingRateObserved())
 	rtts := f.rtts()
-	s.RTTSevenNumSum = f.sevenNumSum(rtts)
+	s.RTTSummary = f.summary(rtts)
+	s.RTTVarSummary = f.summary(f.rttvars())
 	cwnds := f.cwnds()
 	if s.Samples > 1 {
 		var w []float64
@@ -256,6 +310,14 @@ func (f *flow) rtts() (r []float64) {
 	return
 }
 
+func (f *flow) rttvars() (v []float64) {
+	v = make([]float64, len(f.Data))
+	for i := 0; i < len(f.Data); i++ {
+		v[i] = usToMs(f.Data[i].RTTVarus)
+	}
+	return
+}
+
 func (f *flow) cwnds() (w []float64) {
 	w = make([]float64, len(f.Data))
 	for i := 0; i < len(f.Data); i++ {
@@ -282,7 +344,7 @@ func (f *flow) pacing() (p []float64) {
 	return
 }
 
-func (f *flow) sevenNumSum(d []float64) (s [7]float64) {
+func (f *flow) summary(d []float64) (s [7]float64) {
 	var w []float64
 	if f.UnweightedQuantiles {
 		sort.Float64s(d)
@@ -293,7 +355,7 @@ func (f *flow) sevenNumSum(d []float64) (s [7]float64) {
 		t.transformToSlices(d, w)
 	}
 	if debug {
-		log.Printf("sevenNumSum d=%v, w=%v, dlen=%d, wlen=%d", d, w, len(d), len(w))
+		log.Printf("summary d=%v, w=%v, dlen=%d, wlen=%d", d, w, len(d), len(w))
 	}
 	for i := 0; i < 7; i++ {
 		s[i] = stat.Quantile(snsPcts[i], f.CumulantKind, d, w)

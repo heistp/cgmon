@@ -28,6 +28,7 @@ struct nl_sample {
 	uint8_t options;              // TCP options (TCPI_OPT_* in linux/tcp.h)
 	uint32_t rtt_us;              // TCP round-trip time in usec
 	uint32_t min_rtt_us;          // min TCP round-trip time in usec
+	uint32_t rtt_var_us;          // TCP round-trip time variance in usec
 	uint32_t snd_cwnd_bytes;      // TCP send cwnd in bytes
 	uint64_t pacing_rate_Bps;     // TCP pacing rate in bytes/sec
 	uint32_t total_retrans;       // TCP total retransmits

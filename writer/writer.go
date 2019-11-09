@@ -29,15 +29,26 @@ type Config struct {
 	Log              bool
 }
 
+type Metrics struct {
+	WriteTimes metrics.DurationStats
+	sync.RWMutex
+}
+
+func (m *Metrics) recordWriteTime(d time.Duration) {
+	m.Lock()
+	defer m.Unlock()
+	m.WriteTimes.Push(d)
+}
+
 type Writer struct {
 	Config
-	metrics *metrics.Metrics
+	metrics Metrics
 	enc     *json.Encoder
 	writer  flushWriter
 	sync.Mutex
 }
 
-func Open(cfg Config, m *metrics.Metrics) (w *Writer, err error) {
+func Open(cfg Config) (w *Writer, err error) {
 	var writer flushWriter
 	if cfg.Dir != "" {
 		// compressed: fileWriter -> gzip -> countWriter -> buf -> file
@@ -59,7 +70,7 @@ func Open(cfg Config, m *metrics.Metrics) (w *Writer, err error) {
 
 	w = &Writer{
 		cfg,
-		m,
+		Metrics{},
 		enc,
 		writer,
 		sync.Mutex{},
@@ -91,7 +102,7 @@ func (w *Writer) Write(ss []*analyzer.FlowStats) (err error) {
 	}
 
 	el := time.Since(t0)
-	w.metrics.PushWriter(el)
+	w.metrics.recordWriteTime(el)
 
 	if w.Log {
 		log.Printf("writer time=%s flows=%d", el, len(ss))
@@ -110,6 +121,13 @@ func (w *Writer) Close() (err error) {
 		err = f.Flush()
 	}
 
+	return
+}
+
+func (w *Writer) Metrics() (m Metrics) {
+	w.metrics.RLock()
+	defer w.metrics.RUnlock()
+	m = w.metrics
 	return
 }
 

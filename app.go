@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"runtime"
+	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/heistp/cgmon/analyzer"
-	"github.com/heistp/cgmon/metrics"
 	"github.com/heistp/cgmon/netlink"
 	"github.com/heistp/cgmon/sampler"
 	"github.com/heistp/cgmon/tracker"
@@ -18,18 +20,10 @@ import (
 // - The correlation between retransmits and cwnd always appears to be around 0,
 //   leading me to believe this it isn't done the right way or what we want.
 // - Ok calculation for snd_cwnd_bytes?
-// - Flows end with first sample where they're missing, ok?
-// - Ok handling of idle flows with time gaps as weights?
 // - There may not be enough data on shorter flows to calculate statistically
 //   significant correlations, so we may need to use -tracker-min-samples
 // - Should I rename Src/Dst to Local/Remote? Src/Dst used in tcphdr. Can
 //   I tell if it's a client or server socket from tcphdr or tcp_info?
-// - First quantile input data weight is median of others, ok?
-// - Timestamp taken right after netlink receive, ok?
-// - Added counters for Delivered and DeliveredCE (ECE marked packets), but
-//   no correlations yet
-// - Max pacing rate from the kernel appears to always have a value of
-//   147573952589676.4, so I pulled it out for now
 
 type Config struct {
 	Netlink     netlink.Config  // netlink config
@@ -60,21 +54,18 @@ type App struct {
 	fc       chan []*tracker.Flow
 	fsc      chan []*analyzer.FlowStats
 	errc     chan error
-	metrics  *metrics.Metrics // internal metrics
 }
 
 func NewApp(cfg *Config) (a *App, err error) {
-	m := metrics.NewMetrics()
-
 	var w *writer.Writer
-	if w, err = writer.Open(cfg.Writer, m); err != nil {
+	if w, err = writer.Open(cfg.Writer); err != nil {
 		return
 	}
 
 	a = &App{cfg,
-		netlink.NewSampler(cfg.Netlink, m),
-		tracker.NewTracker(cfg.Tracker, m),
-		analyzer.NewAnalyzer(cfg.Analyzer, m),
+		netlink.NewSampler(cfg.Netlink),
+		tracker.NewTracker(cfg.Tracker),
+		analyzer.NewAnalyzer(cfg.Analyzer),
 		w,
 		0,
 		make(<-chan time.Time),
@@ -85,7 +76,6 @@ func NewApp(cfg *Config) (a *App, err error) {
 		make(chan []*tracker.Flow, 256),
 		make(chan []*analyzer.FlowStats, 1024),
 		make(chan error, 1),
-		m,
 	}
 
 	return
@@ -173,6 +163,68 @@ Outer:
 		}
 	}
 
+	return
+}
+
+func (a *App) netlinkSampler() (s *netlink.Sampler) {
+	var ok bool
+	if s, ok = a.sampler.(*netlink.Sampler); !ok {
+		panic("sampler isn't netlink")
+	}
+	return
+}
+
+func (a *App) DumpMetrics() (s string) {
+	sb := &strings.Builder{}
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+
+	nm := a.netlinkSampler().Metrics()
+	tm := a.tracker.Metrics()
+	am := a.analyzer.Metrics()
+	wm := a.writer.Metrics()
+
+	w := tabwriter.NewWriter(sb, 0, 0, 2, ' ', 0)
+
+	fmt.Fprintf(w, "Tracking %d flows\n\n", tm.TrackedFlows)
+
+	fmt.Fprintf(w, "Churn rate (flows/sec):\n")
+	fmt.Fprintf(w, "-----------------------\n\n")
+	fmt.Fprintf(w, "Instantaneous\t%.2f\n", tm.InstChurnRate)
+	fmt.Fprintf(w, "Mean\t%.2f\n", tm.ChurnRate())
+	fmt.Fprintf(w, "\n")
+
+	nt := nm.SampleTimes
+	ct := nm.ConvertTimes
+	tt := tm.TrackTimes
+	at := am.AnalyzeTimes
+	wt := wm.WriteTimes
+	fmt.Fprintf(w, "Pipeline Stage Times (in μs):\n")
+	fmt.Fprintf(w, "-----------------------------\n\n")
+	fmt.Fprintf(w, "Stage\tCalls\tMin\tMean\tMax\tStddev\n")
+	fmt.Fprintf(w, "Netlink\t%d\t%d\t%d\t%d\t%d\n",
+		nt.N, us(nt.Min), us(nt.Mean()), us(nt.Max), us(nt.Stddev()))
+	fmt.Fprintf(w, "Conversion\t%d\t%d\t%d\t%d\t%d\n",
+		ct.N, us(ct.Min), us(ct.Mean()), us(ct.Max), us(ct.Stddev()))
+	fmt.Fprintf(w, "Tracker\t%d\t%d\t%d\t%d\t%d\n",
+		tt.N, us(tt.Min), us(tt.Mean()), us(tt.Max), us(tt.Stddev()))
+	fmt.Fprintf(w, "Analyzer\t%d\t%d\t%d\t%d\t%d\n",
+		at.N, us(at.Min), us(at.Mean()), us(at.Max), us(at.Stddev()))
+	fmt.Fprintf(w, "Writer\t%d\t%d\t%d\t%d\t%d\n",
+		wt.N, us(wt.Min), us(wt.Mean()), us(wt.Max), us(wt.Stddev()))
+	fmt.Fprintf(w, "\n")
+
+	fmt.Fprintf(w, "Memory Stats:\n")
+	fmt.Fprintf(w, "-------------\n\n")
+	fmt.Fprintf(w, "Heap alloc objects\t%d\n", ms.HeapAlloc)
+	fmt.Fprintf(w, "Heap total objects\t%d\n", ms.TotalAlloc)
+	fmt.Fprintf(w, "Sys (OS virt size)\t%d\n", ms.Sys)
+	fmt.Fprintf(w, "Mallocs\t%d\n", ms.Mallocs)
+	fmt.Fprintf(w, "Frees\t%d\n", ms.Frees)
+	fmt.Fprintf(w, "Live objects\t%d\n", ms.Mallocs-ms.Frees)
+	w.Flush()
+
+	s = sb.String()
 	return
 }
 
@@ -268,9 +320,14 @@ func (a *App) wait(ch <-chan time.Time) (stopped bool, err error) {
 }
 
 func (a *App) httpServer() {
-	http.Handle("/", newRootHandler(a.metrics))
+	http.Handle("/", newRootHandler(a))
+	http.Handle("/flow-duration-histogram", &flowDurationHistogramHandler{a.analyzer})
 	log.Printf("starting http server on %s", a.HTTPAddr)
 	if err := http.ListenAndServe(a.HTTPAddr, nil); err != nil {
 		log.Printf("http server exiting due to error (%s)", err)
 	}
+}
+
+func us(d time.Duration) int64 {
+	return int64(d) / 1e3
 }

@@ -11,7 +11,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/heistp/cgmon/metrics"
 	"github.com/heistp/cgmon/sampler"
 )
 
@@ -22,7 +21,7 @@ type Result struct {
 	stats      C.struct_nl_sample_stats
 	log        bool
 	samplesCh  chan []sampler.Sample
-	metrics    *metrics.Metrics
+	metrics    *Metrics
 }
 
 func (r *Result) Samples() (ss []sampler.Sample) {
@@ -43,6 +42,7 @@ func (r *Result) Samples() (ss []sampler.Sample) {
 				uint8(s.options),
 				uint32(s.rtt_us),
 				uint32(s.min_rtt_us),
+				uint32(s.rtt_var_us),
 				uint32(s.snd_cwnd_bytes),
 				uint64(s.pacing_rate_Bps),
 				uint32(s.total_retrans),
@@ -55,7 +55,7 @@ func (r *Result) Samples() (ss []sampler.Sample) {
 	}
 
 	el := time.Since(t0)
-	r.metrics.PushConversion(el)
+	r.metrics.recordConvertTime(el)
 
 	if r.log {
 		log.Printf("conversion time=%s samples=%d", el, len(ss))

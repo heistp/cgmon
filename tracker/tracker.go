@@ -2,6 +2,7 @@ package tracker
 
 import (
 	"log"
+	"sync"
 	"time"
 
 	"github.com/heistp/cgmon/metrics"
@@ -29,16 +30,49 @@ type Flow struct {
 	EndTstampNs    uint64         // monotonic nsec time of last sample, even if it was de-duped
 }
 
+type Metrics struct {
+	StartTime        time.Time
+	TrackTimes       metrics.DurationStats
+	TrackedFlows     int
+	PriorEndedFlows  uint64
+	PriorTrackerTime time.Time
+	EndedFlows       uint64
+	InstChurnRate    float64
+	sync.RWMutex
+}
+
+func (m *Metrics) record(now time.Time, elapsed time.Duration,
+	tracked, ended int) {
+	m.Lock()
+	defer m.Unlock()
+
+	if m.StartTime.IsZero() {
+		m.StartTime = time.Now()
+	}
+
+	m.TrackTimes.Push(elapsed)
+	m.TrackedFlows = tracked
+	m.EndedFlows += uint64(ended)
+	m.InstChurnRate = (float64(m.EndedFlows) - float64(m.PriorEndedFlows)) /
+		float64(now.Sub(m.PriorTrackerTime).Seconds())
+	m.PriorEndedFlows = m.EndedFlows
+	m.PriorTrackerTime = now
+}
+
+func (m *Metrics) ChurnRate() float64 {
+	return float64(m.EndedFlows) / float64(time.Since(m.StartTime).Seconds())
+}
+
 type Tracker struct {
 	Config
-	metrics    *metrics.Metrics
+	metrics    Metrics
 	flows      map[sampler.ID]*Flow
 	firstTrack bool
 }
 
-func NewTracker(cfg Config, m *metrics.Metrics) (t *Tracker) {
+func NewTracker(cfg Config) (t *Tracker) {
 	t = &Tracker{cfg,
-		m,
+		Metrics{},
 		make(map[sampler.ID]*Flow),
 		true,
 	}
@@ -66,13 +100,20 @@ func (t *Tracker) Track(ss []sampler.Sample) (ended []*Flow) {
 	}
 
 	el := time.Since(t0)
-	t.metrics.PushTracker(el, len(t.flows), ts.Ended)
+	t.metrics.record(t0, el, len(t.flows), ts.Ended)
 
 	if t.Log {
 		log.Printf("tracker time=%s new=%d filtered=%d updated=%d deduped=%d ended=%d deleted=%d",
 			el, ts.New, ts.Filtered, ts.Updated, ts.Deduped, ts.Ended, ts.Deleted)
 	}
 
+	return
+}
+
+func (t *Tracker) Metrics() (m Metrics) {
+	t.metrics.RLock()
+	defer t.metrics.RUnlock()
+	m = t.metrics
 	return
 }
 

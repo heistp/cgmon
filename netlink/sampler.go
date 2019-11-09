@@ -35,16 +35,34 @@ type Config struct {
 	Log                 bool          // if true enable logging
 }
 
+type Metrics struct {
+	SampleTimes  metrics.DurationStats
+	ConvertTimes metrics.DurationStats
+	sync.RWMutex
+}
+
+func (m *Metrics) recordSampleTime(d time.Duration) {
+	m.Lock()
+	defer m.Unlock()
+	m.SampleTimes.Push(d)
+}
+
+func (m *Metrics) recordConvertTime(d time.Duration) {
+	m.Lock()
+	defer m.Unlock()
+	m.ConvertTimes.Push(d)
+}
+
 type Sampler struct {
 	Config
-	metrics   *metrics.Metrics
+	metrics   Metrics
 	session   *C.struct_nl_session
 	resultsCh chan *Result
 	samplesCh chan []sampler.Sample
 	sync.Mutex
 }
 
-func NewSampler(cfg Config, m *metrics.Metrics) *Sampler {
+func NewSampler(cfg Config) *Sampler {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	if !netlinkInitialized {
@@ -53,7 +71,7 @@ func NewSampler(cfg Config, m *metrics.Metrics) *Sampler {
 	}
 
 	return &Sampler{cfg,
-		m,
+		Metrics{},
 		nil,
 		make(chan *Result, 32),
 		make(chan []sampler.Sample, 32),
@@ -78,7 +96,7 @@ func (s *Sampler) Sample() (r sampler.Result, err error) {
 	}
 
 	el := time.Since(t0)
-	s.metrics.PushNetlink(el)
+	s.metrics.recordSampleTime(el)
 
 	if s.Log {
 		ss := nr.sampleStats()
@@ -103,6 +121,13 @@ func (s *Sampler) RecycleSamples(ss []sampler.Sample) {
 	case s.samplesCh <- ss:
 	default:
 	}
+}
+
+func (s *Sampler) Metrics() (m Metrics) {
+	s.metrics.RLock()
+	defer s.metrics.RUnlock()
+	m = s.metrics
+	return
 }
 
 func (s *Sampler) Close() error {
@@ -141,7 +166,7 @@ func (s *Sampler) nlSample() (r *Result, err error) {
 		if s.Log {
 			log.Printf("allocating new netlink result buffer")
 		}
-		r = &Result{log: s.Log, samplesCh: s.samplesCh, metrics: s.metrics}
+		r = &Result{log: s.Log, samplesCh: s.samplesCh, metrics: &s.metrics}
 	}
 
 	_, err = C.nl_sample(s.session, &r.samples, &r.samplesCap, &r.stats)

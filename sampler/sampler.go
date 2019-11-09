@@ -19,6 +19,7 @@ type Data struct {
 	Options          uint8  // TCP options (TCPI_OPT_* in linux/tcp.h)
 	RTTus            uint32 // TCP RTT in microseconds
 	MinRTTus         uint32 // min TCP RTT in microseconds
+	RTTVarus         uint32 // TCP RTT variance in microseconds
 	SndCwndBytes     uint32 // TCP cwnd in bytes
 	PacingRateBps    uint64 // TCP pacing rate in bytes / second
 	TotalRetransmits uint32 // total retransmit counter
@@ -32,6 +33,7 @@ type Data struct {
 // as the given data.
 func (d *Data) EquivalentTo(d1 *Data) bool {
 	return d.RTTus == d1.RTTus &&
+		d.RTTVarus == d1.RTTVarus &&
 		d.BytesAcked == d1.BytesAcked &&
 		d.PacingRateBps == d1.PacingRateBps &&
 		d.TotalRetransmits == d1.TotalRetransmits &&
