@@ -546,3 +546,7 @@ in one of two ways:
 - Refactor and improve metrics
 - Use audit subsystem to detect socket creation and poll immediately?
 - Improve performance or reduce garbage, if needed
+- Add spearman's rank correlation coefficient
+- Stop converting snd_cwnd to bytes
+- Discard first data points instead of using medians
+- Re-add delivered and delivered_ce but allow compiling on 4.15
