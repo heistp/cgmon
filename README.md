@@ -45,11 +45,8 @@ Feel free to report any problems or feature requests as issues.
 Install instructions:
 
 1. [Install Go](https://golang.org/dl/).
-2. Download cgmon: `go get -u github.com/heistp/cgmon`
-3. Build cgmon: `go build` (from `cgmon` directory, by default
-   `~/go/src/github.com/heistp/cgmon`)
-4. Put `cgmon` somewhere on your PATH (or specify an absolute path)
-5. Run `cgmon -h` for usage
+2. Install cgmon: `go install github.com/heistp/cgmon@latest`
+3. Run `cgmon -h` for usage
 
 A few more (hopefully unnecessary) notes:
 
